@@ -1,7 +1,6 @@
 import { Client, GatewayIntentBits, EmbedBuilder, ChannelType } from 'discord.js';
 import { Octokit } from '@octokit/rest';
 import dotenv from 'dotenv';
-import express from 'express';
 
 // Load environment variables
 dotenv.config();
@@ -27,10 +26,7 @@ const config = {
 
     // Labels to specifically include (if empty, includes all except excluded)
     // ORDER MATTERS: Issues with multiple labels will be placed in the first matching label's embed
-    INCLUDED_LABELS: ['pending release', 'bug'],
-
-    // Priority labels to always track (these come first in priority order)
-    PRIORITY_LABELS: [],
+    INCLUDED_LABELS: ['pending release', 'bug', 'feature request', 'enhancement'],
 
     // Track unlabeled issues
     TRACK_UNLABELED: true,
@@ -47,17 +43,6 @@ console.log('Bot configuration:', {
     hasToken: !!config.GITHUB_TOKEN,
     updateInterval: config.UPDATE_INTERVAL
 });
-
-const app = express()
-const port = process.env.PORT || 10000
-
-app.get('/', (req, res) => {
-    res.send('');
-})
-
-app.listen(port, () => {
-    console.log(`Example app listening on port ${port}`)
-})
 
 class MultiServerGitHubIssuesBot {
     constructor() {
@@ -268,37 +253,32 @@ class MultiServerGitHubIssuesBot {
             let filteredLabels;
 
             if (config.INCLUDED_LABELS.length > 0) {
-                // If INCLUDED_LABELS is specified, only include those labels (case-insensitive)
+                // If INCLUDED_LABELS is specified, use that order (case-insensitive)
                 const includedLower = config.INCLUDED_LABELS.map(label => label.toLowerCase());
-                filteredLabels = labels
-                    .map(label => label.name)
-                    .filter(name => includedLower.includes(name.toLowerCase()));
-                console.log(`📋 Using INCLUDED_LABELS filter for ${guild.name}`);
+                filteredLabels = [];
+
+                // First, add labels in the order specified in INCLUDED_LABELS
+                for (const includedLabel of config.INCLUDED_LABELS) {
+                    const matchingLabel = labels.find(label =>
+                        label.name.toLowerCase() === includedLabel.toLowerCase()
+                    );
+                    if (matchingLabel) {
+                        filteredLabels.push(matchingLabel.name);
+                    }
+                }
+
+                console.log(`📋 Using INCLUDED_LABELS order for ${guild.name}`);
             } else {
-                // If INCLUDED_LABELS is empty, include all except excluded (case-insensitive)
+                // If INCLUDED_LABELS is empty, use GitHub's fetch order minus excluded labels
                 const excludedLower = config.EXCLUDED_LABELS.map(label => label.toLowerCase());
                 filteredLabels = labels
                     .map(label => label.name)
                     .filter(name => !excludedLower.includes(name.toLowerCase()));
-                console.log(`📋 Using EXCLUDED_LABELS filter for ${guild.name}`);
+                console.log(`📋 Using GitHub fetch order for ${guild.name}`);
             }
 
-            // Create ordered list of labels (priority first, then others)
-            // Use actual GitHub label names (preserve original case)
-            const priorityLabelsActual = config.PRIORITY_LABELS.map(priorityLabel => {
-                const actual = labels.find(label => label.name.toLowerCase() === priorityLabel.toLowerCase());
-                return actual ? actual.name : priorityLabel; // Use actual case or fallback to config case
-            });
-
-            const orderedLabels = [
-                ...priorityLabelsActual,
-                ...filteredLabels.filter(label =>
-                    !config.PRIORITY_LABELS.some(p => p.toLowerCase() === label.toLowerCase())
-                )
-            ];
-
-            serverData.availableLabels = new Set(orderedLabels);
-            serverData.labelPriority = orderedLabels; // Store the priority order
+            serverData.availableLabels = new Set(filteredLabels);
+            serverData.labelPriority = filteredLabels; // Store the order
 
             // Add unlabeled tracking if enabled
             if (config.TRACK_UNLABELED) {
@@ -311,9 +291,14 @@ class MultiServerGitHubIssuesBot {
 
         } catch (error) {
             console.error(`❌ Error fetching labels for ${guild.name}:`, error);
-            // Fallback to priority labels + unlabeled (preserve config case)
-            serverData.availableLabels = new Set([...config.PRIORITY_LABELS]);
-            serverData.labelPriority = [...config.PRIORITY_LABELS];
+            // Fallback to included labels or empty set
+            if (config.INCLUDED_LABELS.length > 0) {
+                serverData.availableLabels = new Set(config.INCLUDED_LABELS);
+                serverData.labelPriority = [...config.INCLUDED_LABELS];
+            } else {
+                serverData.availableLabels = new Set();
+                serverData.labelPriority = [];
+            }
             if (config.TRACK_UNLABELED) {
                 serverData.availableLabels.add('unlabeled');
                 serverData.labelPriority.push('unlabeled');
@@ -390,9 +375,7 @@ class MultiServerGitHubIssuesBot {
             // Update embeds for each label
             for (const [label, labelIssues] of issuesByLabel) {
                 // Only create/update embeds if there are issues OR we already have a message for this label
-                if (labelIssues.length > 0 || serverData.messageIds.has(label)) {
-                    await this.updateLabelEmbed(guildId, label, labelIssues);
-                }
+                await this.updateLabelEmbed(guildId, label, labelIssues);
             }
 
             console.log(`✅ Updated ${actualIssues.length} issues for ${guild.name} (${issues.length - actualIssues.length} PRs ignored)`);
@@ -423,11 +406,8 @@ class MultiServerGitHubIssuesBot {
                 embed.setDescription(`✅ No open issues with this label\n\n🔗 [View all ${label} issues on GitHub](${githubUrl})`);
             } else {
                 const description = issues.map(issue => {
-                    const updatedAgo = this.getTimeAgo(new Date(issue.updated_at));
-                    const assignee = issue.assignee ? ` • 👤 ${issue.assignee.login}` : '';
-                    return `**[#${issue.number}](${issue.html_url})** ${issue.title}\n` +
-                        `└ Updated ${updatedAgo}${assignee}`;
-                }).join('\n\n');
+                    return `**[#${issue.number}](${issue.html_url})** ${issue.title}`;
+                }).join('\n');
 
                 const fullDescription = `${description}\n\n🔗 [View all ${label} issues on GitHub](${githubUrl})`;
 
