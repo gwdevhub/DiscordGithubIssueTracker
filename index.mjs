@@ -1,6 +1,7 @@
 import { Client, GatewayIntentBits, EmbedBuilder, ChannelType } from 'discord.js';
 import { Octokit } from '@octokit/rest';
 import dotenv from 'dotenv';
+import express from 'express';
 
 // Load environment variables
 dotenv.config();
@@ -35,7 +36,7 @@ const config = {
     UPDATE_INTERVAL: 5,
 
     // Maximum issues to show per label
-    MAX_ISSUES_PER_LABEL: 10
+    MAX_ISSUES_PER_LABEL: 100
 };
 
 console.log('Bot configuration:', {
@@ -43,6 +44,17 @@ console.log('Bot configuration:', {
     hasToken: !!config.GITHUB_TOKEN,
     updateInterval: config.UPDATE_INTERVAL
 });
+
+const app = express()
+const port = process.env.PORT || 10000
+
+app.get('/', (req, res) => {
+    res.send('');
+})
+
+app.listen(port, () => {
+    console.log(`Example app listening on port ${port}`)
+})
 
 class MultiServerGitHubIssuesBot {
     constructor() {
