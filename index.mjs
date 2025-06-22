@@ -27,7 +27,7 @@ const config = {
 
     // Labels to specifically include (if empty, includes all except excluded)
     // ORDER MATTERS: Issues with multiple labels will be placed in the first matching label's embed
-    INCLUDED_LABELS: ['pending release', 'bug', 'feature request', 'enhancement'],
+    INCLUDED_LABELS: ['pending release', 'help wanted', 'bug', 'feature request', 'enhancement'],
 
     // Track unlabeled issues
     TRACK_UNLABELED: true,
