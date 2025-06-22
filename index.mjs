@@ -421,11 +421,27 @@ class MultiServerGitHubIssuesBot {
                     return `**[#${issue.number}](${issue.html_url})** ${issue.title}`;
                 }).join('\n');
 
-                const fullDescription = `${description}\n\n🔗 [View all ${label} issues on GitHub](${githubUrl})`;
+                const githubLink = `\n\n🔗 [View all ${label} issues on GitHub](${githubUrl})`;
+                const fullDescription = description + githubLink;
 
-                // Truncate if too long
-                embed.setDescription(fullDescription.length > 4096 ?
-                    description.substring(0, 4000) + `...\n\n🔗 [View all ${label} issues on GitHub](${githubUrl})` : fullDescription);
+                // Check if description exceeds Discord's 4096 character limit
+                if (fullDescription.length > 4096) {
+                    // Calculate how much space we have for issues (leaving room for link and ellipsis)
+                    const availableSpace = 4096 - githubLink.length - 4; // 4 chars for "..."
+
+                    // Truncate the description and add ellipsis
+                    const truncatedDescription = description.substring(0, availableSpace);
+
+                    // Try to cut at a complete line to avoid cutting mid-issue
+                    const lastNewlineIndex = truncatedDescription.lastIndexOf('\n');
+                    const finalDescription = lastNewlineIndex > 0 ?
+                        truncatedDescription.substring(0, lastNewlineIndex) :
+                        truncatedDescription;
+
+                    embed.setDescription(`${finalDescription}\n...${githubLink}`);
+                } else {
+                    embed.setDescription(fullDescription);
+                }
             }
 
             // Check if we have an existing message for this label
